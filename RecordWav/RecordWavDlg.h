@@ -42,20 +42,19 @@ protected:
 public:
 	afx_msg void OnBnClickedBtnRecordStart();
 
-	HWAVEIN hWaveIn;       // 波形音频数据格式Wave_audio数据格式
-	WAVEFORMATEX waveform;
-	HWAVEOUT hWaveOut;     // 打开回放设备函数
-	WAVEHDR *pWaveHdr1;
-	WAVEHDR *pWaveHdr2;
+	HWAVEIN m_hWaveIn;       // 波形音频数据格式Wave_audio数据格式
+	WAVEFORMATEX m_waveform;
+	HWAVEOUT m_hWaveOut;     // 打开回放设备函数
+	WAVEHDR* m_pWaveHdr1;
+	WAVEHDR* m_pWaveHdr2;
 
-	PBYTE pBuffer1;
-	PBYTE pBuffer2;
-	PBYTE pSaveBuffer;
-	PBYTE pNewBuffer;
-	int dwDataLength;
-	bool bEnding;
-	afx_msg void OnBnClickedBtnRecordStop();
-	afx_msg void OnBnClickedBtnPlay();
+	PBYTE m_pBuffer1;
+	PBYTE m_pBuffer2;
+	PBYTE m_pSaveBuffer;
+	PBYTE m_pNewBuffer;
+	int m_dwDataLength;
+	bool m_bEnding;
+
 protected:
 	afx_msg LRESULT OnMmWimOpen(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnMmWimData(WPARAM wParam, LPARAM lParam);
@@ -63,4 +62,10 @@ protected:
 	afx_msg LRESULT OnMmWomOpen(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnMmWomDone(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnMmWomClose(WPARAM wParam, LPARAM lParam);
+	
+	afx_msg void OnBnClickedBtnRecordStop();
+	afx_msg void OnBnClickedBtnPlay();
+	afx_msg void OnDestroy();
+
+	void Release();
 };

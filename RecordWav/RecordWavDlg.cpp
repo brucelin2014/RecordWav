@@ -52,6 +52,12 @@ CRecordWavDlg::CRecordWavDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CRecordWavDlg::IDD, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	m_pBuffer1 = nullptr;
+	m_pBuffer2 = nullptr;
+	m_pSaveBuffer = nullptr;
+	m_pNewBuffer = nullptr;
+	m_pWaveHdr1 = nullptr;
+	m_pWaveHdr2 = nullptr;
 }
 
 void CRecordWavDlg::DoDataExchange(CDataExchange* pDX)
@@ -74,6 +80,7 @@ BEGIN_MESSAGE_MAP(CRecordWavDlg, CDialogEx)
 	ON_MESSAGE(MM_WOM_OPEN, &CRecordWavDlg::OnMmWomOpen)
 	ON_MESSAGE(MM_WOM_DONE, &CRecordWavDlg::OnMmWomDone)
 	ON_MESSAGE(MM_WOM_CLOSE, &CRecordWavDlg::OnMmWomClose)
+	ON_WM_DESTROY()
 END_MESSAGE_MAP()
 
 
@@ -108,13 +115,14 @@ BOOL CRecordWavDlg::OnInitDialog()
 	SetIcon(m_hIcon, TRUE);			// 设置大图标
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
-	dwDataLength = FRAGMENT_SIZE;
+	m_dwDataLength = FRAGMENT_SIZE;
 
 	//allocate memory for wave header
-	pWaveHdr1 = reinterpret_cast<PWAVEHDR>(malloc(sizeof(WAVEHDR)));
-	pWaveHdr2 = reinterpret_cast<PWAVEHDR>(malloc(sizeof(WAVEHDR)));
+	m_pWaveHdr1 = reinterpret_cast<PWAVEHDR>(malloc(sizeof(WAVEHDR)));
+	m_pWaveHdr2 = reinterpret_cast<PWAVEHDR>(malloc(sizeof(WAVEHDR)));
+
 	//allocate memory for save buffer
-	pSaveBuffer = reinterpret_cast<PBYTE>(malloc(1));
+	m_pSaveBuffer = reinterpret_cast<PBYTE>(malloc(1));
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -168,79 +176,91 @@ HCURSOR CRecordWavDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+void CRecordWavDlg::Release()
+{
+	if (m_pBuffer1)
+	{
+		free(m_pBuffer1);
+		m_pBuffer1 = nullptr;
+	}
+	if (m_pBuffer2)
+	{
+		free(m_pBuffer2);
+		m_pBuffer2 = nullptr;
+	}
+}
+
 void CRecordWavDlg::OnBnClickedBtnRecordStart()
 {
+	Release();
+
 	// allocate buffer memory
-	pBuffer1 = (PBYTE)malloc(dwDataLength);
-	pBuffer2 = (PBYTE)malloc(dwDataLength);
-	if (!pBuffer1 || !pBuffer2)
+	m_pBuffer1 = (PBYTE)malloc(m_dwDataLength);
+	m_pBuffer2 = (PBYTE)malloc(m_dwDataLength);
+	if (!m_pBuffer1 || !m_pBuffer2)
 	{
-		if (pBuffer1)
-			free(pBuffer1);
-		if (pBuffer2)
-			free(pBuffer2);
+		Release();
 		MessageBeep(MB_ICONEXCLAMATION);
 		AfxMessageBox(_T("Memory erro!"));
 		return;
 	}
 
 	// open waveform audio for input
-	waveform.wFormatTag = WAVE_FORMAT_PCM;
-	waveform.nChannels = 2;
-	waveform.nSamplesPerSec = 44100;
-	waveform.nAvgBytesPerSec = 176400;
-	waveform.nBlockAlign = 4;
-	waveform.wBitsPerSample = 16;
-	waveform.cbSize = 0;
+	m_waveform.wFormatTag = WAVE_FORMAT_PCM;
+	m_waveform.nChannels = 2;
+	m_waveform.nSamplesPerSec = 44100;
+	m_waveform.nAvgBytesPerSec = 176400;
+	m_waveform.nBlockAlign = 4;
+	m_waveform.wBitsPerSample = 16;
+	m_waveform.cbSize = 0;
 	
-	if (waveInOpen(&hWaveIn, WAVE_MAPPER, &waveform, (DWORD)this->m_hWnd, NULL, CALLBACK_WINDOW))
+	if (waveInOpen(&m_hWaveIn, WAVE_MAPPER, &m_waveform, (DWORD)this->m_hWnd, NULL, CALLBACK_WINDOW))
 	{
-		free(pBuffer1);
-		free(pBuffer2);
+		Release();
 		MessageBeep(MB_ICONEXCLAMATION);
 		AfxMessageBox(_T("Audio can not be open!"));
 	}
 
-	pWaveHdr1->lpData = (LPSTR)pBuffer1;
-	pWaveHdr1->dwBufferLength = dwDataLength;
-	pWaveHdr1->dwBytesRecorded = 0;
-	pWaveHdr1->dwUser = 0;
-	pWaveHdr1->dwFlags = 0;
-	pWaveHdr1->dwLoops = 1;
-	pWaveHdr1->lpNext = NULL;
-	pWaveHdr1->reserved = 0;
+	m_pWaveHdr1->lpData = (LPSTR)m_pBuffer1;
+	m_pWaveHdr1->dwBufferLength = m_dwDataLength;
+	m_pWaveHdr1->dwBytesRecorded = 0;
+	m_pWaveHdr1->dwUser = 0;
+	m_pWaveHdr1->dwFlags = 0;
+	m_pWaveHdr1->dwLoops = 1;
+	m_pWaveHdr1->lpNext = NULL;
+	m_pWaveHdr1->reserved = 0;
 	
-	waveInPrepareHeader(hWaveIn, pWaveHdr1, sizeof(WAVEHDR));
+	waveInPrepareHeader(m_hWaveIn, m_pWaveHdr1, sizeof(WAVEHDR));
 	
-	pWaveHdr2->lpData = (LPSTR)pBuffer2;//
-	pWaveHdr2->dwBufferLength = dwDataLength;
-	pWaveHdr2->dwBytesRecorded = 0;
-	pWaveHdr2->dwUser = 0;
-	pWaveHdr2->dwFlags = 0;
-	pWaveHdr2->dwLoops = 1;
-	pWaveHdr2->lpNext = NULL;
-	pWaveHdr2->reserved = 0;
+	m_pWaveHdr2->lpData = (LPSTR)m_pBuffer2;//
+	m_pWaveHdr2->dwBufferLength = m_dwDataLength;
+	m_pWaveHdr2->dwBytesRecorded = 0;
+	m_pWaveHdr2->dwUser = 0;
+	m_pWaveHdr2->dwFlags = 0;
+	m_pWaveHdr2->dwLoops = 1;
+	m_pWaveHdr2->lpNext = NULL;
+	m_pWaveHdr2->reserved = 0;
 	
-	waveInPrepareHeader(hWaveIn, pWaveHdr2, sizeof(WAVEHDR));
+	waveInPrepareHeader(m_hWaveIn, m_pWaveHdr2, sizeof(WAVEHDR));
 	
-	pSaveBuffer = (PBYTE)realloc (pSaveBuffer, 1);
+	m_pSaveBuffer = (PBYTE)realloc (m_pSaveBuffer, 1);
 	
 	// Add the buffers
-	waveInAddBuffer (hWaveIn, pWaveHdr1, sizeof (WAVEHDR));
-	waveInAddBuffer (hWaveIn, pWaveHdr2, sizeof (WAVEHDR));
+	waveInAddBuffer (m_hWaveIn, m_pWaveHdr1, sizeof (WAVEHDR));
+	waveInAddBuffer (m_hWaveIn, m_pWaveHdr2, sizeof (WAVEHDR));
 	
 	// Begin sampling
-	bEnding = FALSE;
-	dwDataLength = 0;
-	waveInStart (hWaveIn);
+	m_bEnding = FALSE;
+	m_dwDataLength = 0;
+	waveInStart (m_hWaveIn);
 }
 
 
 void CRecordWavDlg::OnBnClickedBtnRecordStop()
 {
-	bEnding = TRUE;
+	m_bEnding = TRUE;
 	// 停止录音
-	waveInReset(hWaveIn);
+	waveInReset(m_hWaveIn);
 	
 	// 存储声音文件
 	CFile m_file;
@@ -281,22 +301,22 @@ void CRecordWavDlg::OnBnClickedBtnRecordStop()
 	m_file.SeekToBegin();
 	m_file.Write("RIFF", 4);
 	//unsigned int Sec=(sizeof  + m_WaveHeaderSize);
-	unsigned int Sec = (sizeof pSaveBuffer + m_WaveHeaderSize);
+	unsigned int Sec = (sizeof m_pSaveBuffer + m_WaveHeaderSize);
 	m_file.Write(&Sec, sizeof(Sec));
 	m_file.Write("WAVE", 4);
 	m_file.Write("fmt ", 4);
 	m_file.Write(&m_WaveFormatSize, sizeof(m_WaveFormatSize));
-	m_file.Write(&waveform.wFormatTag, sizeof(waveform.wFormatTag));
-	m_file.Write(&waveform.nChannels, sizeof(waveform.nChannels));
-	m_file.Write(&waveform.nSamplesPerSec, sizeof(waveform.nSamplesPerSec));
-	m_file.Write(&waveform.nAvgBytesPerSec, sizeof(waveform.nAvgBytesPerSec));
-	m_file.Write(&waveform.nBlockAlign, sizeof(waveform.nBlockAlign));
-	m_file.Write(&waveform.wBitsPerSample, sizeof(waveform.wBitsPerSample));
-	m_file.Write(&waveform.cbSize, sizeof(waveform.cbSize));
+	m_file.Write(&m_waveform.wFormatTag, sizeof(m_waveform.wFormatTag));
+	m_file.Write(&m_waveform.nChannels, sizeof(m_waveform.nChannels));
+	m_file.Write(&m_waveform.nSamplesPerSec, sizeof(m_waveform.nSamplesPerSec));
+	m_file.Write(&m_waveform.nAvgBytesPerSec, sizeof(m_waveform.nAvgBytesPerSec));
+	m_file.Write(&m_waveform.nBlockAlign, sizeof(m_waveform.nBlockAlign));
+	m_file.Write(&m_waveform.wBitsPerSample, sizeof(m_waveform.wBitsPerSample));
+	m_file.Write(&m_waveform.cbSize, sizeof(m_waveform.cbSize));
 	m_file.Write("data", 4);
-	m_file.Write(&dwDataLength, sizeof(dwDataLength));
-	m_file.Write(pSaveBuffer, dwDataLength);
-	m_file.Seek(dwDataLength, CFile::begin);
+	m_file.Write(&m_dwDataLength, sizeof(m_dwDataLength));
+	m_file.Write(m_pSaveBuffer, m_dwDataLength);
+	m_file.Seek(m_dwDataLength, CFile::begin);
 	m_file.Close();
 }
 
@@ -304,7 +324,7 @@ void CRecordWavDlg::OnBnClickedBtnRecordStop()
 void CRecordWavDlg::OnBnClickedBtnPlay()
 {
 	// open waveform audio for output
-	waveform.wFormatTag = WAVE_FORMAT_PCM;
+	m_waveform.wFormatTag = WAVE_FORMAT_PCM;
 	
 	// 设置不同的声音采样格式
 	/* waveform.nChannels   = 1;
@@ -313,13 +333,13 @@ void CRecordWavDlg::OnBnClickedBtnPlay()
 	waveform.nBlockAlign    =1;
 	waveform.wBitsPerSample =8; */
 	
-	waveform.nChannels = 2;
-	waveform.nSamplesPerSec = 44100;
-	waveform.nAvgBytesPerSec = 176400;
-	waveform.nBlockAlign = 4;
-	waveform.wBitsPerSample = 16;
+	m_waveform.nChannels = 2;
+	m_waveform.nSamplesPerSec = 44100;
+	m_waveform.nAvgBytesPerSec = 176400;
+	m_waveform.nBlockAlign = 4;
+	m_waveform.wBitsPerSample = 16;
 	
-	if (waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveform, (DWORD)this->m_hWnd, NULL, CALLBACK_WINDOW))
+	if (waveOutOpen(&m_hWaveOut, WAVE_MAPPER, &m_waveform, (DWORD)this->m_hWnd, NULL, CALLBACK_WINDOW))
 	{
 		MessageBeep(MB_ICONEXCLAMATION);
 		AfxMessageBox(_T("Audio output erro"));
@@ -339,27 +359,27 @@ afx_msg LRESULT CRecordWavDlg::OnMmWimOpen(WPARAM wParam, LPARAM lParam)
 afx_msg LRESULT CRecordWavDlg::OnMmWimData(WPARAM wParam, LPARAM lParam)
 {
 	// Reallocate save buffer memory
-	pNewBuffer = (PBYTE)realloc (pSaveBuffer, dwDataLength +((PWAVEHDR) lParam)->dwBytesRecorded);
-	if (pNewBuffer == NULL)
+	m_pNewBuffer = (PBYTE)realloc (m_pSaveBuffer, m_dwDataLength +((PWAVEHDR) lParam)->dwBytesRecorded);
+	if (m_pNewBuffer == NULL)
 	{
-		waveInClose (hWaveIn);
+		waveInClose (m_hWaveIn);
 		MessageBeep (MB_ICONEXCLAMATION);
 		AfxMessageBox(_T("erro memory"));
 		return TRUE;
 	}
 	
-	pSaveBuffer = pNewBuffer;
-	CopyMemory (pSaveBuffer + dwDataLength, ((PWAVEHDR) lParam)->lpData,
+	m_pSaveBuffer = m_pNewBuffer;
+	CopyMemory (m_pSaveBuffer + m_dwDataLength, ((PWAVEHDR) lParam)->lpData,
 		((PWAVEHDR) lParam)->dwBytesRecorded);
-	dwDataLength += ((PWAVEHDR) lParam)->dwBytesRecorded;
+	m_dwDataLength += ((PWAVEHDR) lParam)->dwBytesRecorded;
 	
-	if (bEnding)
+	if (m_bEnding)
 	{
-		waveInClose (hWaveIn);
+		waveInClose (m_hWaveIn);
 		return TRUE;
 	}
 	
-	waveInAddBuffer (hWaveIn, (PWAVEHDR) lParam, sizeof (WAVEHDR));
+	waveInAddBuffer (m_hWaveIn, (PWAVEHDR) lParam, sizeof (WAVEHDR));
 	return 0;
 }
 
@@ -367,18 +387,17 @@ afx_msg LRESULT CRecordWavDlg::OnMmWimData(WPARAM wParam, LPARAM lParam)
 afx_msg LRESULT CRecordWavDlg::OnMmWimClose(WPARAM wParam, LPARAM lParam)
 {
 	KillTimer(1);
-	if (0 == dwDataLength)
+	if (0 == m_dwDataLength)
 	{
 		return TRUE;
 	}
 	
-	waveInUnprepareHeader (hWaveIn, pWaveHdr1, sizeof (WAVEHDR));
-	waveInUnprepareHeader (hWaveIn, pWaveHdr2, sizeof (WAVEHDR));
+	waveInUnprepareHeader (m_hWaveIn, m_pWaveHdr1, sizeof (WAVEHDR));
+	waveInUnprepareHeader (m_hWaveIn, m_pWaveHdr2, sizeof (WAVEHDR));
 	
-	free (pBuffer1);
-	free (pBuffer2);
+	Release();
 	
-	if (dwDataLength > 0)
+	if (m_dwDataLength > 0)
 	{
 		//enable play
 		((CWnd *)(this->GetDlgItem(IDC_BTN_RECORD_START)))->EnableWindow(TRUE);
@@ -395,18 +414,18 @@ afx_msg LRESULT CRecordWavDlg::OnMmWimClose(WPARAM wParam, LPARAM lParam)
 afx_msg LRESULT CRecordWavDlg::OnMmWomOpen(WPARAM wParam, LPARAM lParam)
 {
 	// Set up header
-	pWaveHdr1->lpData = (LPSTR)pSaveBuffer;
-	pWaveHdr1->dwBufferLength = dwDataLength;
-	pWaveHdr1->dwBytesRecorded = 0;
-	pWaveHdr1->dwUser = 0;
-	pWaveHdr1->dwFlags = WHDR_BEGINLOOP | WHDR_ENDLOOP;
-	pWaveHdr1->dwLoops = 1;
-	pWaveHdr1->lpNext = NULL;
-	pWaveHdr1->reserved = 0;
+	m_pWaveHdr1->lpData = (LPSTR)m_pSaveBuffer;
+	m_pWaveHdr1->dwBufferLength = m_dwDataLength;
+	m_pWaveHdr1->dwBytesRecorded = 0;
+	m_pWaveHdr1->dwUser = 0;
+	m_pWaveHdr1->dwFlags = WHDR_BEGINLOOP | WHDR_ENDLOOP;
+	m_pWaveHdr1->dwLoops = 1;
+	m_pWaveHdr1->lpNext = NULL;
+	m_pWaveHdr1->reserved = 0;
 	
 	// Prepare and write
-	waveOutPrepareHeader (hWaveOut, pWaveHdr1, sizeof (WAVEHDR));
-	waveOutWrite (hWaveOut, pWaveHdr1, sizeof (WAVEHDR));
+	waveOutPrepareHeader (m_hWaveOut, m_pWaveHdr1, sizeof (WAVEHDR));
+	waveOutWrite (m_hWaveOut, m_pWaveHdr1, sizeof (WAVEHDR));
 	((CWnd *)(this->GetDlgItem(IDC_BTN_RECORD_START)))->EnableWindow(TRUE);
 	((CWnd *)(this->GetDlgItem(IDC_BTN_RECORD_STOP)))->EnableWindow(FALSE);
 	((CWnd *)(this->GetDlgItem(IDC_BTN_PLAY)))->EnableWindow(FALSE);
@@ -416,8 +435,8 @@ afx_msg LRESULT CRecordWavDlg::OnMmWomOpen(WPARAM wParam, LPARAM lParam)
 
 afx_msg LRESULT CRecordWavDlg::OnMmWomDone(WPARAM wParam, LPARAM lParam)
 {
-	waveOutUnprepareHeader (hWaveOut, pWaveHdr1, sizeof (WAVEHDR));
-	waveOutClose (hWaveOut);
+	waveOutUnprepareHeader (m_hWaveOut, m_pWaveHdr1, sizeof (WAVEHDR));
+	waveOutClose (m_hWaveOut);
 	return  NULL;
 	return 0;
 }
@@ -429,4 +448,35 @@ afx_msg LRESULT CRecordWavDlg::OnMmWomClose(WPARAM wParam, LPARAM lParam)
 	((CWnd *)(this->GetDlgItem(IDC_BTN_RECORD_STOP)))->EnableWindow(FALSE);
 	((CWnd *)(this->GetDlgItem(IDC_BTN_PLAY)))->EnableWindow(TRUE);
 	return 0;
+}
+
+
+void CRecordWavDlg::OnDestroy()
+{
+	CDialogEx::OnDestroy();
+
+	Release();
+
+	if (m_pSaveBuffer)
+	{
+		free(m_pSaveBuffer);
+		m_pSaveBuffer = nullptr;
+	}
+
+	if (m_pNewBuffer)
+	{
+		//free(m_pNewBuffer);
+		//m_pNewBuffer = nullptr;
+	}
+
+	if (m_pWaveHdr1)
+	{
+		free(m_pWaveHdr1);
+		m_pWaveHdr1 = nullptr;
+	}
+	if (m_pWaveHdr2)
+	{
+		free(m_pWaveHdr2);
+		m_pWaveHdr2 = nullptr;
+	}
 }
