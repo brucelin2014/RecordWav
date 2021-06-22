@@ -17,7 +17,20 @@ public:
 	CRecordWavImpl(void);
 	~CRecordWavImpl(void);
 
-private:
+public:
+	void Init(CWnd* pWndParent);
+	bool RecordStart(); // 开始录音
+	bool RecordStop();  // 停止录音
+	bool RecordPlay();  // 播放录音
+
+	LRESULT OnMmWimOpen(WPARAM wParam, LPARAM lParam);
+	LRESULT OnMmWimData(WPARAM wParam, LPARAM lParam);  // 正在录音
+	LRESULT OnMmWimClose(WPARAM wParam, LPARAM lParam); // 录音完毕
+
+	LRESULT OnMmWomOpen(WPARAM wParam, LPARAM lParam);  // 打开录音
+	LRESULT OnMmWomDone(WPARAM wParam, LPARAM lParam);
+	LRESULT OnMmWomClose(WPARAM wParam, LPARAM lParam);
+
 	void Release();
 
 	HWAVEIN m_hWaveIn;       // 波形音频数据格式Wave_audio数据格式
@@ -32,5 +45,8 @@ private:
 	PBYTE m_pNewBuffer;
 	int m_dwDataLength;
 	bool m_bEnding;
+
+private:
+	CWnd* m_pWndParent;
 };
 
